@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>重生之我在设计院画图 - 15.1 补丁版</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #000000;
+            --border: #000000;
+        }
+
+        /* 修复居中问题的核心补丁 */
+        body {
+            font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 0;
+            display: flex;             /* 启用 Flex 布局 */
+            justify-content: center;    /* 水平居中 */
+            align-items: center;        /* 垂直居中 */
+            height: 100vh;              /* 占据浏览器全高 */
+            width: 100vw;
+            overflow: hidden;           /* 防止滚动条干扰居中 */
+        }
+
+        /* 游戏主包裹框 */
+        #main-wrapper {
+            width: 95%;
+            max-width: 800px;
+            height: 90vh;               /* 限制高度在视口内 */
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+            box-sizing: border-box;
+            border: 5px solid var(--border); /* 改为全边框，更美观 */
+            background: #fff;
+            position: relative;
+        }
+
+        /* 状态栏：模块化设计 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            border: 4px solid var(--border);
+            margin-bottom: 15px;
+            flex-shrink: 0;
+        }
+        .stat-item {
+            padding: 8px;
+            text-align: center;
+            border-right: 3px solid var(--border);
+        }
+        .stat-item:last-child { border-right: none; }
+        .stat-label { font-size: 12px; font-weight: 900; color: #555; }
+        .stat-val { font-size: 15px; display: block; margin-top: 4px; font-weight: bold; }
+
+        /* 进度条 */
+        #progress-bar {
+            width: 100%;
+            height: 12px;
+            border: 3px solid var(--border);
+            margin-bottom: 15px;
+            background: #fff;
+        }
+        #progress-inner { height: 100%; background: var(--border); width: 0%; transition: width 0.3s; }
+
+        /* 内容滚动区 */
+        #scene-box {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        /* 漫画插画 */
+        #manga-frame {
+            width: 100%;
+            height: 250px;
+            flex-shrink: 0;
+            border: 4px solid var(--border);
+            margin-bottom: 15px;
+            background: #fff;
+            overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
+        }
+        #manga-img {
+            width: 100%; height: 100%; object-fit: cover;
+            filter: grayscale(100%) contrast(1.3);
+        }
+
+        #scene-header {
+            font-size: 13px; font-weight: 900;
+            border-bottom: 3px solid var(--border);
+            padding-bottom: 5px; margin-bottom: 10px;
+            display: flex; justify-content: space-between;
+        }
+
+        #scene-body { font-size: 16px; line-height: 1.6; margin-bottom: 15px; }
+
+        /* 警告提示 */
+        #warning-hint {
+            border: 2px solid #000;
+            background: #fdfd96; /* 浅黄色提示 */
+            padding: 8px;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        /* 选项按钮 */
+        .options-group { display: flex; flex-direction: column; gap: 8px; }
+        .opt-btn {
+            background: #fff; border: 3px solid var(--border);
+            padding: 12px; font-size: 14px; font-weight: 900;
+            text-align: left; cursor: pointer;
+        }
+        .opt-btn:hover { background: #000; color: #fff; }
+        .opt-quit { border-style: dashed; color: #666; }
+
+        /* 商店 */
+        #shop {
+            margin-top: 15px; padding: 10px; border: 3px solid var(--border);
+            display: flex; gap: 10px; align-items: center; flex-shrink: 0;
+        }
+        .shop-btn {
+            background: #eee; border: 2px solid var(--border);
+            padding: 5px 10px; font-size: 11px; font-weight: bold; cursor: pointer;
+        }
+
+        /* 覆盖层 */
+        .overlay {
+            position: fixed; inset: 0; background: #fff; z-index: 1000;
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; text-align: center; padding: 40px;
+        }
+        .hide { display: none !important; }
+        
+        #quit-modal {
+            position: fixed; inset: 0; background: rgba(255,255,255,0.9);
+            z-index: 2000; display: flex; justify-content: center; align-items: center;
+        }
+        #quit-box {
+            width: 80%; max-width: 400px; background: #fff;
+            border: 6px solid #000; padding: 25px;
+            box-shadow: 10px 10px 0px #000;
+        }
+
+        .btn-black {
+            padding: 12px 35px; background: #000; color: #fff;
+            border: none; font-size: 18px; font-weight: 900; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="welcome" class="overlay">
+        <h1 style="font-size: 42px; border: 10px solid #000; padding: 20px;">重生之我在设计院画图</h1>
+        <p style="font-weight: 900; font-size: 18px;">—— 建筑师职业马拉松模拟 ——</p>
+        <button class="btn-black" onclick="initGame()">投 胎 (开始游戏)</button>
+    </div>
+
+    <div id="game-ui" class="hide">
+        <div id="main-wrapper">
+            <div id="progress-bar"><div id="progress-inner"></div></div>
+            <div class="stats-grid">
+                <div class="stat-item"><span class="stat-label">天数</span><span id="day-val" class="stat-val">1</span></div>
+                <div class="stat-item"><span class="stat-label">发量</span><span id="hair-val" class="stat-val">100k</span></div>
+                <div class="stat-item"><span class="stat-label">心智</span><span id="sanity-val" class="stat-val">100</span></div>
+                <div class="stat-item"><span class="stat-label">声望</span><span id="rep-val" class="stat-val">0</span></div>
+                <div class="stat-item"><span class="stat-label">奖金</span><span id="money-val" class="stat-val">￥0</span></div>
+            </div>
+
+            <div id="scene-box">
+                <div id="scene-header">
+                    <span id="rank-name">职级：职场新人</span>
+                    <span id="stage-num">关卡 01 / 30</span>
+                </div>
+                <div id="manga-frame">
+                    <img id="manga-img" src="">
+                </div>
+                <div id="warning-hint"></div>
+                <div id="scene-body"></div>
+                <div id="options" class="options-group"></div>
+                <div id="shop">
+                    <span style="font-size: 11px; font-weight: bold;">补给站：</span>
+                    <button class="shop-btn" onclick="buyItem('coffee')">冰美式 ￥200 (+25 心智)</button>
+                    <button class="shop-btn" onclick="buyItem('wig')">生发水 ￥1000 (+1.5w 发量)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="quit-modal" class="hide">
+        <div id="quit-box">
+            <div style="font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline;">系统提示</div>
+            <div id="quit-text" style="font-size: 17px; font-weight: 900; line-height: 1.6; margin-bottom: 25px;"></div>
+            <button class="btn-black" onclick="closeQuitModal()">回到现实</button>
+        </div>
+    </div>
+
+    <div id="ending" class="overlay hide">
+        <div id="end-status" style="font-size: 48px; border: 8px solid #000; padding: 15px 40px; margin-bottom: 20px;"></div>
+        <div id="end-desc" style="max-width: 550px; font-size: 20px; line-height: 1.8;"></div>
+    </div>
+
+    <div id="disclaimer-page" class="overlay hide">
+        <h2 style="font-size: 36px; border-bottom: 5px solid #000; padding-bottom: 10px;">本游戏纯属娱乐～</h2>
+        <p style="font-weight: 900; margin-top: 20px; line-height: 1.6;">
+            身体是革命的本钱，请爱护发际线，适度加班。<br>
+            愿每一位牛马建筑师都能看到明天的太阳。
+        </p>
+        <button class="btn-black" onclick="location.reload()">重新投胎</button>
+    </div>
+
+<script>
+    let state = { step: 0, day: 1, hair: 100000, sanity: 100, rep: 0, money: 0 };
+
+    // 剧本与之前一致，仅确保 img 路径为本地
+    const script = [
+        { img: "scene01", t: "入职", b: "拿到通知书，人事说：‘我们实行弹性工作制’。你后来明白，弹性的意思是‘只往后弹’。", opts: [{text:"“我会努力工作的！”", h:-100, s:-5, r:10}, {text:"“什么时候发工资？”", s:5, r:-5}]},
+        { img: "scene02", t: "清理底图", b: "500MB底图，全是‘炸开的块’。午饭前必须清完。", opts: [{text:"手动强改，工匠精神", h:-1000, s:-10, m:200, r:15}, {text:"全选丢进 0 层", h:-200, s:-5, r:-10}]},
+        { img: "scene03", t: "规范噩梦", b: "《防火规范》厚度像字典，你感觉这辈子的噩梦都在这书里。", opts: [{text:"逐字研读笔记", h:-800, s:-10, r:20}, {text:"看图示瞎画", s:-5, r:5}]},
+        { img: "scene04", t: "老板的圆圈", b: "深夜两点，老板画个圆：‘要体现城市代谢的呼吸感’。", opts: [{text:"连夜推敲哲学意义", h:-3000, s:-15, r:30, m:1000}, {text:"理解为花坛", s:-5, r:-10}]},
+        { img: "scene05", t: "甲方的灰", b: "甲方张总：‘立面要带呼吸感的灰。’你调了20个灰度，他不满意。", opts: [{text:"出色卡让他选", h:-1500, s:-15, r:10, m:500}, {text:"调低显示器对比度", s:-10, r:-5}]},
+        { img: "scene06", t: "工地之泥", b: "工地泥泞，钢筋工师傅冷笑：‘这钢筋，你行你来塞？’", opts: [{text:"蹲坑商量避让", h:-1000, s:-10, r:25, m:800}, {text:"按图施工被骂", s:-30, r:-15}]},
+        { img: "scene07", t: "专业打架", b: "梁挡风管，风管压吊顶。三专业在群里开启大乱斗。", opts: [{text:"通宵协调全专业", h:-3000, s:-20, r:40, m:1500}, {text:"等组长解决", s:10, r:-25}]},
+        { img: "scene08", t: "碳代谢课题", b: "老板让你写篇‘校园碳代谢报告’，全英文。", opts: [{text:"查SCI文献核算", h:-3000, s:-20, r:60, m:3000}, {text:"数字全靠编", s:-5, r:-40}]},
+        { img: "scene09", t: "审图鸟类", b: "审图意见：‘论证建筑造型对候鸟迁徙的影响’。", opts: [{text:"手绘模拟路径", h:-2000, s:-20, r:35, m:2000}, {text:"买专家认证", s:10, r:-20, m:-1000}]},
+        { img: "scene10", t: "晋升PM", b: "你晋升为PM。现在手机24小时都在震动。", opts: [{text:"开启拉扯模式", r:40, m:5000}]},
+        { img: "scene11", t: "深夜语音", b: "凌晨一点。甲方张总连发10条59秒语音。", opts: [{text:"秒回：‘收到’", h:-4000, s:-25, r:30, m:2500}, {text:"明天再说", s:15, r:-20}]},
+        { img: "scene12", t: "汇报意外", b: "规委会汇报前，PPT文件损坏且无备份。", opts: [{text:"连夜手绘草图", h:-5000, s:-30, r:50, m:2000}, {text:"直接盲讲", s:-40, r:-80}]},
+        { img: "scene13", t: "欠薪危机", b: "甲方欠费，本月奖金归零。信用卡已到期。", opts: [{text:"继续画图", h:-1000, s:-25, r:15}, {text:"悄悄摸鱼", s:20, r:-40}]},
+        { img: "scene14", t: "双标折磨", b: "老板要前卫，审图要保守。你夹在中间。", opts: [{text:"做两套图", h:-3000, s:-20, r:20}, {text:"拉两方互撕", s:-30, r:40}]},
+        { img: "scene15", t: "方案被毙", b: "评审专家把你得意的概念批得一文不值。", opts: [{text:"按他的改", h:-1000, s:-15, r:10}, {text:"维护尊严硬刚", s:-15, r:-150}]},
+        { img: "scene16", t: "连续通宵", b: "连续14天凌晨两点回家。梦里全是消火栓。", opts: [{text:"死磕到盖章", h:-5000, s:-35, r:40, m:4000}, {text:"请假一天", s:30, m:-1500}]},
+        { img: "scene17", t: "结构巨变", b: "快出施工图了，甲方要把裙房改挑空大堂。", opts: [{text:"全专业通宵", h:-6000, s:-40, r:50, m:6000}, {text:"拒绝修改", s:-30, r:-100}]},
+        { img: "scene18", t: "城市更新", b: "旧改现场。居民因为采光问题把你围住了。", opts: [{text:"耐心讲解日照", h:-2000, s:-20, r:40, m:1000}, {text:"翻墙逃走", s:-20, r:-30}]},
+        { img: "scene19", t: "论坛尴尬", b: "参加学术论坛，发现讲稿和上一位撞了。", opts: [{text:"现场即兴改", h:-2000, s:-30, r:50, m:2000}, {text:"肚子疼离场", s:-10, r:-60}]},
+        { img: "scene20", t: "老板的大饼", b: "老板：‘明年人人配股份，都是合伙人。’", opts: [{text:"热泪盈眶继续干", h:-2000, s:-20, r:20}, {text:"看招聘软件", s:10, r:-10}]},
+        { img: "scene21", t: "投标冲刺", b: "超高层投标24小时。效果图公司跑路了。", opts: [{text:"自己上手渲染", h:-6000, s:-35, r:60, m:8000}, {text:"白模强行汇报", s:-30, r:-100}]},
+        { img: "scene22", t: "甲方暴走", b: "甲方要窗户全改成古典拱窗。", opts: [{text:"照做，虽然丑", h:-4000, s:-35, r:40, m:5000}, {text:"消极怠工", s:-10, r:-5}]},
+        { img: "scene23", t: "二轮审图", b: "二轮意见和第一轮完全相反。", opts: [{text:"陷入轮回", h:-4000, s:-30, r:30, m:2000}, {text:"不管逻辑改了", s:-25, r:10}]},
+        { img: "scene24", t: "职业倦怠", b: "你突然忘了为什么要当建筑师。", opts: [{text:"抽根烟继续", h:-500, s:-20, m:200}, {text:"洗手间痛哭", s:20, r:-5}]},
+        { img: "scene25", t: "AI危机", b: "老板问：‘如果AI能画图，还要你干嘛？’", opts: [{text:"钻研咒语", h:-2000, s:-25, r:50, m:3000}, {text:"被冷落", s:-20, r:-50}]},
+        { img: "scene26", t: "老友聚会", b: "IT同学年薪百万。你还要席间回微信。", opts: [{text:"‘我有追求’", h:-1000, s:-30, r:10}, {text:"喝闷酒", s:-10, r:-5}]},
+        { img: "scene27", t: "终极盖章", b: "几十本厚图等待盖章。", opts: [{text:"闭眼盖下去", h:-2000, s:-20, r:60, m:5000}]},
+        { img: "scene28", t: "现场事故", b: "工地塌了墙。甲方要你圆谎。", opts: [{text:"据实说明", h:-2000, s:-40, r:100}, {text:"圆谎换钱", s:-80, r:-150, m:15000}]},
+        { img: "scene29", t: "行业教父", b: "被评为‘年度杰出青年建筑师’。", opts: [{text:"谈碳代谢", h:-2000, s:-20, r:200, m:10000}, {text:"感谢深夜", s:-30, r:100}]},
+        { img: "scene30", t: "合伙人邀请", b: "老板递过一份入股合同。", opts: [{text:"签！成为合伙牛马", h:-5000, s:-30, r:150, isFinal:true}, {text:"不签，我想睡觉", isFinal:true}]}
+    ];
+
+    const failQuit = [
+        "投递【送外卖】，但脊柱已硬化无法佩戴头盔。失败。",
+        "面试【奶茶店】，店长怕你摇爆杯子。失败。",
+        "【考公】填涂答题卡时寻找快捷键导致失败。失败。",
+        "【摊煎饼】非要按防火分区加鸡蛋，出餐慢被投诉。失败。"
+    ];
+
+    function initGame() {
+        state = { step: 0, day: 1, hair: 100000, sanity: 100, rep: 0, money: 0 };
+        document.getElementById('welcome').classList.add('hide');
+        document.getElementById('game-ui').classList.remove('hide');
+        render();
+    }
+
+    function render() {
+        if (state.hair <= 0 || state.sanity <= 0) {
+            triggerEnd("身体崩溃", "你倒在了绘图桌上。下辈子别入这行了。");
+            return;
+        }
+
+        const data = script[state.step];
+        document.getElementById('manga-img').src = `images/${data.img}.jpg`;
+        document.getElementById('progress-inner').style.width = (state.step / 30 * 100) + "%";
+        document.getElementById('day-val').innerText = state.day;
+        document.getElementById('hair-val').innerText = (state.hair/1000).toFixed(1) + "k";
+        document.getElementById('sanity-val').innerText = state.sanity;
+        document.getElementById('rep-val').innerText = state.rep;
+        document.getElementById('money-val').innerText = "￥" + state.money;
+        document.getElementById('stage-num').innerText = `关卡 ${(state.step + 1).toString().padStart(2, '0')} / 30`;
+        document.getElementById('rank-name').innerText = state.rep > 300 ? '职级：合伙人' : (state.rep > 80 ? '职级：项目经理' : '职级：职场新人');
+        document.getElementById('scene-body').innerText = `【${data.t}】\n\n${data.b}`;
+
+        // 警告补丁
+        const hint = document.getElementById('warning-hint');
+        if (state.sanity < 40) {
+            hint.innerText = "🚨 警告：心智极低，容易崩溃！快去补给站喝冰美式！";
+            hint.style.display = 'block';
+        } else if (state.hair < 30000) {
+            hint.innerText = "🚨 警告：头皮发麻，发量危险！建议使用生发水补充！";
+            hint.style.display = 'block';
+        } else {
+            hint.style.display = 'none';
+        }
+
+        const opts = document.getElementById('options');
+        opts.innerHTML = '';
+        data.opts.forEach(o => {
+            const b = document.createElement('button');
+            b.className = 'opt-btn';
+            b.innerText = o.text;
+            b.onclick = () => {
+                state.hair += (o.h || 0);
+                state.sanity += (o.s || 0);
+                state.rep += (o.r || 0);
+                state.money += (o.m || 0);
+                state.day += Math.floor(Math.random()*15 + 10);
+                if (o.isFinal) finalize();
+                else { state.step++; render(); }
+            };
+            opts.appendChild(b);
+        });
+
+        if (Math.random() > 0.65 && !data.isFinal) {
+            const bQuit = document.createElement('button');
+            bQuit.className = 'opt-btn opt-quit';
+            bQuit.innerText = "我要转行！";
+            bQuit.onclick = () => {
+                document.getElementById('quit-text').innerText = failQuit[Math.floor(Math.random()*failQuit.length)];
+                document.getElementById('quit-modal').classList.remove('hide');
+            };
+            opts.appendChild(bQuit);
+        }
+    }
+
+    function closeQuitModal() {
+        document.getElementById('quit-modal').classList.add('hide');
+        state.sanity -= 20;
+        render();
+    }
+
+    function buyItem(type) {
+        if (type === 'coffee' && state.money >= 200) {
+            state.money -= 200; state.sanity = Math.min(100, state.sanity + 25);
+        } else if (type === 'wig' && state.money >= 1000) {
+            state.money -= 1000; state.hair += 15000;
+        } else { alert("奖金不足！"); }
+        render();
+    }
+
+    function finalize() {
+        let t, d;
+        if (state.rep >= 500) {
+            t = "行业传奇"; d = "你成为了合伙人。虽然忘了阳光，但你的名字印在无数图纸右下角。";
+        } else if (state.sanity > 50) {
+            t = "潇洒离场"; d = "你回了老家，找回了笑容和颈椎。";
+        } else {
+            t = "庸碌一生"; d = "你成为了普通的砖，直到退休。";
+        }
+        triggerEnd(t, d);
+    }
+
+    function triggerEnd(title, desc) {
+        document.getElementById('game-ui').classList.add('hide');
+        const endPage = document.getElementById('ending');
+        endPage.classList.remove('hide');
+        document.getElementById('end-status').innerText = title;
+        document.getElementById('end-desc').innerText = desc;
+
+        setTimeout(() => {
+            endPage.classList.add('hide');
+            document.getElementById('disclaimer-page').classList.remove('hide');
+        }, 5000);
+    }
+</script>
+</body>
+</html>
